@@ -1,0 +1,17 @@
+build/
+.vscode/
+.idea/
+
+*.o
+*.so
+*.a
+
+*.log
+*.csv
+*.json
+
+__pycache__/
+.venv/
+.env
+
+compile_commands.json

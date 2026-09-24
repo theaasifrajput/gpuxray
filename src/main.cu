@@ -247,9 +247,59 @@ static void print_gpu_info() {
     }
 }
 
+static void print_p2p_matrix() {
+    int device_count = 0;
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+
+    std::cout << "GPUXRay P2P Capability\n";
+    std::cout << "======================\n";
+    std::cout << "Visible GPUs: " << device_count << "\n\n";
+
+    if (device_count < 2) {
+        std::cout << "P2P testing requires at least 2 visible GPUs.\n";
+        return;
+    }
+
+    std::cout << "      ";
+
+    for (int dst = 0; dst < device_count; ++dst) {
+        std::cout << "GPU" << dst << "   ";
+    }
+
+    std::cout << "\n";
+
+    for (int src = 0; src < device_count; ++src) {
+        std::cout << "GPU" << src << "  ";
+
+        for (int dst = 0; dst < device_count; ++dst) {
+            if (src == dst) {
+                std::cout << "  --   ";
+                continue;
+            }
+
+            int can_access = 0;
+
+            CUDA_CHECK(cudaDeviceCanAccessPeer(
+                &can_access,
+                src,
+                dst
+            ));
+
+            std::cout << (can_access ? " YES   " : " NO    ");
+        }
+
+        std::cout << "\n";
+    }
+}
+
 int main(int argc, char** argv) {
     if (argc > 1 && std::string(argv[1]) == "info") {
         print_gpu_info();
+        return EXIT_SUCCESS;
+    }
+
+    if (argc > 1 && std::string(argv[1]) == "p2p") {
+        print_p2p_matrix();
         return EXIT_SUCCESS;
     }
 

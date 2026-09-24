@@ -213,7 +213,46 @@ static double effective_bandwidth_gbps(
     return (payload_bytes / seconds) / 1e9;
 }
 
+
+static void print_gpu_info() {
+    int device_count = 0;
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+
+    std::cout << "GPUXRay GPU Information\n";
+    std::cout << "=======================\n";
+    std::cout << "Visible GPUs: " << device_count << "\n\n";
+
+    for (int device = 0; device < device_count; ++device) {
+        cudaDeviceProp prop{};
+
+        CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
+
+        std::cout << "GPU " << device << "\n";
+        std::cout << "  Name               : " << prop.name << "\n";
+        std::cout << "  Compute Capability : "
+                  << prop.major << "." << prop.minor << "\n";
+        std::cout << "  SMs                : "
+                  << prop.multiProcessorCount << "\n";
+        std::cout << "  Global Memory      : "
+                  << static_cast<double>(prop.totalGlobalMem) /
+                         (1024.0 * 1024.0 * 1024.0)
+                  << " GB\n";
+        std::cout << "  Memory Bus Width   : "
+                  << prop.memoryBusWidth << " bits\n";
+        std::cout << "  Clock Rate         : "
+                  << prop.clockRate / 1000 << " MHz\n";
+        std::cout << "  Memory Clock       : "
+                  << prop.memoryClockRate / 1000 << " MHz\n";
+        std::cout << "\n";
+    }
+}
+
 int main(int argc, char** argv) {
+    if (argc > 1 && std::string(argv[1]) == "info") {
+        print_gpu_info();
+        return EXIT_SUCCESS;
+    }
+
     Options o = parse_args(argc, argv);
 
     int device_count = 0;

@@ -252,7 +252,7 @@ static void print_p2p_matrix() {
     CUDA_CHECK(cudaGetDeviceCount(&device_count));
 
     std::cout << "GPUXRay P2P Capability\n";
-    std::cout << "======================\n";
+    std::cout << "======================\n\n";
     std::cout << "Visible GPUs: " << device_count << "\n\n";
 
     if (device_count < 2) {

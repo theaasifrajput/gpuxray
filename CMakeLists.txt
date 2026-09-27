@@ -33,7 +33,10 @@ endif()
 add_executable(gpuxray_nccl_bench
     src/main.cu
     src/gpu/gpu_info.cu
+    src/p2p/p2p.cu
+    src/nccl/nccl_benchmark.cu
 )
+
 target_include_directories(gpuxray_nccl_bench PRIVATE
     ${NCCL_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/include

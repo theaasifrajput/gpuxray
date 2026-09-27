@@ -8,7 +8,6 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -18,7 +17,7 @@ namespace {
     do {                                                                   \
         ncclResult_t err__ = (call);                                       \
         if (err__ != ncclSuccess) {                                        \
-            std::cerr << "NCCL error: "                                    \
+            std::cerr << "NCCL error: "                                      \
                       << ncclGetErrorString(err__)                          \
                       << " at " << __FILE__ << ":" << __LINE__             \
                       << std::endl;                                        \
@@ -129,6 +128,59 @@ static std::size_t elements_for_collective(
 }
 
 
+static void launch_collective(
+    const BenchmarkConfig& config,
+    RankContext& ctx,
+    std::size_t count
+) {
+    if (config.collective == "allreduce") {
+
+        NCCL_CHECK(
+            ncclAllReduce(
+                ctx.send,
+                ctx.recv,
+                count,
+                ncclFloat,
+                ncclSum,
+                ctx.comm,
+                ctx.stream
+            )
+        );
+
+    }
+    else if (config.collective == "allgather") {
+
+        NCCL_CHECK(
+            ncclAllGather(
+                ctx.send,
+                ctx.recv,
+                count,
+                ncclFloat,
+                ctx.comm,
+                ctx.stream
+            )
+        );
+
+    }
+    else if (config.collective == "reducescatter") {
+
+        NCCL_CHECK(
+            ncclReduceScatter(
+                ctx.send,
+                ctx.recv,
+                count / static_cast<std::size_t>(
+                    config.gpus
+                ),
+                ncclFloat,
+                ncclSum,
+                ctx.comm,
+                ctx.stream
+            )
+        );
+    }
+}
+
+
 static void run_collective(
     const BenchmarkConfig& config,
     RankContext& ctx,
@@ -143,63 +195,33 @@ static void run_collective(
 
         if (!warmup) {
             CUDA_CHECK(
-                cudaEventRecord(ctx.start, ctx.stream)
-            );
-        }
-
-        if (config.collective == "allreduce") {
-
-            NCCL_CHECK(
-                ncclAllReduce(
-                    ctx.send,
-                    ctx.recv,
-                    count,
-                    ncclFloat,
-                    ncclSum,
-                    ctx.comm,
-                    ctx.stream
-                )
-            );
-
-        } else if (config.collective == "allgather") {
-
-            NCCL_CHECK(
-                ncclAllGather(
-                    ctx.send,
-                    ctx.recv,
-                    count,
-                    ncclFloat,
-                    ctx.comm,
-                    ctx.stream
-                )
-            );
-
-        } else if (config.collective == "reducescatter") {
-
-            NCCL_CHECK(
-                ncclReduceScatter(
-                    ctx.send,
-                    ctx.recv,
-                    count / static_cast<std::size_t>(
-                        config.gpus
-                    ),
-                    ncclFloat,
-                    ncclSum,
-                    ctx.comm,
+                cudaEventRecord(
+                    ctx.start,
                     ctx.stream
                 )
             );
         }
+
+        launch_collective(
+            config,
+            ctx,
+            count
+        );
 
         if (!warmup) {
             CUDA_CHECK(
-                cudaEventRecord(ctx.stop, ctx.stream)
+                cudaEventRecord(
+                    ctx.stop,
+                    ctx.stream
+                )
             );
         }
     }
 
     CUDA_CHECK(
-        cudaStreamSynchronize(ctx.stream)
+        cudaStreamSynchronize(
+            ctx.stream
+        )
     );
 }
 
@@ -223,65 +245,38 @@ static float measured_latency_us(
 
     double total_us = 0.0;
 
+    const std::size_t count =
+        elements_for_collective(
+            config,
+            bytes
+        );
+
     for (int i = 0; i < config.iterations; ++i) {
 
         CUDA_CHECK(
-            cudaEventRecord(ctx.start, ctx.stream)
+            cudaEventRecord(
+                ctx.start,
+                ctx.stream
+            )
         );
 
-        const std::size_t count =
-            elements_for_collective(config, bytes);
-
-        if (config.collective == "allreduce") {
-
-            NCCL_CHECK(
-                ncclAllReduce(
-                    ctx.send,
-                    ctx.recv,
-                    count,
-                    ncclFloat,
-                    ncclSum,
-                    ctx.comm,
-                    ctx.stream
-                )
-            );
-
-        } else if (config.collective == "allgather") {
-
-            NCCL_CHECK(
-                ncclAllGather(
-                    ctx.send,
-                    ctx.recv,
-                    count,
-                    ncclFloat,
-                    ctx.comm,
-                    ctx.stream
-                )
-            );
-
-        } else if (config.collective == "reducescatter") {
-
-            NCCL_CHECK(
-                ncclReduceScatter(
-                    ctx.send,
-                    ctx.recv,
-                    count / static_cast<std::size_t>(
-                        config.gpus
-                    ),
-                    ncclFloat,
-                    ncclSum,
-                    ctx.comm,
-                    ctx.stream
-                )
-            );
-        }
-
-        CUDA_CHECK(
-            cudaEventRecord(ctx.stop, ctx.stream)
+        launch_collective(
+            config,
+            ctx,
+            count
         );
 
         CUDA_CHECK(
-            cudaEventSynchronize(ctx.stop)
+            cudaEventRecord(
+                ctx.stop,
+                ctx.stream
+            )
+        );
+
+        CUDA_CHECK(
+            cudaEventSynchronize(
+                ctx.stop
+            )
         );
 
         float ms = 0.0f;
@@ -323,13 +318,15 @@ static double effective_bandwidth_gbps(
             (config.gpus - 1.0) /
             config.gpus;
 
-    } else if (config.collective == "allgather") {
+    }
+    else if (config.collective == "allgather") {
 
         multiplier =
             (config.gpus - 1.0) /
             config.gpus;
 
-    } else if (config.collective == "reducescatter") {
+    }
+    else if (config.collective == "reducescatter") {
 
         multiplier =
             (config.gpus - 1.0) /
@@ -356,7 +353,10 @@ BenchmarkConfig parse_benchmark_args(
     int argc,
     char** argv
 ) {
-    return parse_benchmark_args_impl(argc, argv);
+    return parse_benchmark_args_impl(
+        argc,
+        argv
+    );
 }
 
 
@@ -366,7 +366,9 @@ int run_nccl_benchmark(
     int device_count = 0;
 
     CUDA_CHECK(
-        cudaGetDeviceCount(&device_count)
+        cudaGetDeviceCount(
+            &device_count
+        )
     );
 
     if (device_count < config.gpus) {
@@ -388,8 +390,11 @@ int run_nccl_benchmark(
     ncclUniqueId id;
 
     NCCL_CHECK(
-        ncclGetUniqueId(&id)
+        ncclGetUniqueId(
+            &id
+        )
     );
+
 
     // --------------------------------------------------------
     // Initialize NCCL ranks
@@ -421,11 +426,15 @@ int run_nccl_benchmark(
         );
 
         CUDA_CHECK(
-            cudaEventCreate(&ranks[r].start)
+            cudaEventCreate(
+                &ranks[r].start
+            )
         );
 
         CUDA_CHECK(
-            cudaEventCreate(&ranks[r].stop)
+            cudaEventCreate(
+                &ranks[r].stop
+            )
         );
 
         const std::size_t max_count =
@@ -477,6 +486,7 @@ int run_nccl_benchmark(
             )
         );
     }
+
 
     // --------------------------------------------------------
     // Benchmark output
@@ -541,6 +551,7 @@ int run_nccl_benchmark(
         );
     }
 
+
     // --------------------------------------------------------
     // Cleanup
     // --------------------------------------------------------
@@ -553,30 +564,42 @@ int run_nccl_benchmark(
 
         if (ranks[r].send) {
             CUDA_CHECK(
-                cudaFree(ranks[r].send)
+                cudaFree(
+                    ranks[r].send
+                )
             );
         }
 
         if (ranks[r].recv) {
             CUDA_CHECK(
-                cudaFree(ranks[r].recv)
+                cudaFree(
+                    ranks[r].recv
+                )
             );
         }
 
         CUDA_CHECK(
-            cudaEventDestroy(ranks[r].start)
+            cudaEventDestroy(
+                ranks[r].start
+            )
         );
 
         CUDA_CHECK(
-            cudaEventDestroy(ranks[r].stop)
+            cudaEventDestroy(
+                ranks[r].stop
+            )
         );
 
         CUDA_CHECK(
-            cudaStreamDestroy(ranks[r].stream)
+            cudaStreamDestroy(
+                ranks[r].stream
+            )
         );
 
         NCCL_CHECK(
-            ncclCommDestroy(ranks[r].comm)
+            ncclCommDestroy(
+                ranks[r].comm
+            )
         );
     }
 

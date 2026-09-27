@@ -1,6 +1,7 @@
 #include "gpu/gpu_info.h"
 #include "p2p/p2p.h"
 #include "nccl/nccl_benchmark.h"
+#include "common/cuda_check.h"
 
 #include <cuda_runtime.h>
 
@@ -104,7 +105,7 @@ int main(int argc, char** argv) {
         return EXIT_SUCCESS;
     }
 
-    BenchmarkConfig config = parse_args(argc, argv);
+    BenchmarkConfig config = parse_benchmark_args(argc, argv);
 
     return run_nccl_benchmark(config);
 }

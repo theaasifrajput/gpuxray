@@ -1,6 +1,6 @@
 #include <cuda_runtime.h>
 #include <nccl.h>
-
+#include "gpu/gpu_info.h"
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -215,34 +215,30 @@ static double effective_bandwidth_gbps(
 
 
 static void print_gpu_info() {
-    int device_count = 0;
-    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+    const auto devices = discover_gpus();
 
     std::cout << "GPUXRay GPU Information\n";
-    std::cout << "=======================\n";
-    std::cout << "Visible GPUs: " << device_count << "\n\n";
+    std::cout << "=======================\n\n";
+    std::cout << "Visible GPUs: " << devices.size() << "\n\n";
 
-    for (int device = 0; device < device_count; ++device) {
-        cudaDeviceProp prop{};
-
-        CUDA_CHECK(cudaGetDeviceProperties(&prop, device));
-
-        std::cout << "GPU " << device << "\n";
-        std::cout << "  Name               : " << prop.name << "\n";
+    for (const auto& gpu : devices) {
+        std::cout << "GPU " << gpu.id << "\n";
+        std::cout << "  Name               : " << gpu.name << "\n";
         std::cout << "  Compute Capability : "
-                  << prop.major << "." << prop.minor << "\n";
+                  << gpu.compute_major << "."
+                  << gpu.compute_minor << "\n";
         std::cout << "  SMs                : "
-                  << prop.multiProcessorCount << "\n";
+                  << gpu.sm_count << "\n";
         std::cout << "  Global Memory      : "
-                  << static_cast<double>(prop.totalGlobalMem) /
+                  << static_cast<double>(gpu.global_memory_bytes) /
                          (1024.0 * 1024.0 * 1024.0)
                   << " GB\n";
         std::cout << "  Memory Bus Width   : "
-                  << prop.memoryBusWidth << " bits\n";
+                  << gpu.memory_bus_width_bits << " bits\n";
         std::cout << "  Clock Rate         : "
-                  << prop.clockRate / 1000 << " MHz\n";
+                  << gpu.clock_mhz << " MHz\n";
         std::cout << "  Memory Clock       : "
-                  << prop.memoryClockRate / 1000 << " MHz\n";
+                  << gpu.memory_clock_mhz << " MHz\n";
         std::cout << "\n";
     }
 }
